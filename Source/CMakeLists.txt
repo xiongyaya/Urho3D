@@ -107,6 +107,10 @@ if (NOT IOS AND NOT ANDROID AND NOT RPI AND NOT WEB)
     add_subdirectory (ThirdParty/LibCpuId)
 endif ()
 
+if (URHO3D_NEON)
+    add_subdirectory (ThirdParty/SSE2NEON)
+endif ()
+
 # Urho3D game engine library
 add_subdirectory (Urho3D)
 

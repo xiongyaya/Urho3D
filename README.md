@@ -124,6 +124,8 @@ Urho3D uses the following third-party libraries:
 - rapidjson 0.11 (https://code.google.com/p/rapidjson/)
 - Recast/Detour (https://github.com/memononen/recastnavigation/)
 - SDL 2.0.3 (http://www.libsdl.org/)
+- SSE2NEON n/a (http://codesuppository.blogspot.sg/2015/02/
+  sse2neonh-porting-guide-and-header-file.html)
 - StanHull (http://codesuppository.blogspot.com/2006/03/
   john-ratcliffs-code-suppository-blog.html)
 - stb_image 2.05 (http://nothings.org/)
