@@ -171,7 +171,7 @@ endforeach ()
 
 macro (check_native_compiler_exist)
     file (WRITE ${CMAKE_BINARY_DIR}/generated/CMakeLists.txt "message (\"Probing native compiler toolchain...\")\n")
-    execute_process (COMMAND ${CMAKE_COMMAND} -E env CC=${SAVED_CC} CXX=${SAVED_CXX} ${CMAKE_COMMAND} .
+    execute_process (COMMAND ${CMAKE_COMMAND} -E env CC=${SAVED_CC} CXX=${SAVED_CXX} ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} .
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/generated RESULT_VARIABLE EXIT_CODE ERROR_VARIABLE ERR_VAR OUTPUT_QUIET)
     if (NOT EXIT_CODE EQUAL 0)
         execute_process (COMMAND ${CMAKE_COMMAND} -E remove ${CMAKE_BINARY_DIR}/generated/CMakeCache.txt)
