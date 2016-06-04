@@ -91,7 +91,10 @@ option (URHO3D_NAVIGATION "Enable navigation support" TRUE)
 cmake_dependent_option (URHO3D_NETWORK "Enable networking support" TRUE "NOT WEB" FALSE)
 option (URHO3D_PHYSICS "Enable physics support" TRUE)
 option (URHO3D_URHO2D "Enable 2D graphics and physics support" TRUE)
-if (IOS OR (RPI AND "${RPI_ABI}" MATCHES NEON))    # Stringify in case RPI_ABI is not set explicitly
+if (ARM AND NOT NATIVE_64BIT AND NOT ANDROID AND NOT RPI AND NOT IOS AND NOT TVOS)
+    set (ARM_ABI_FLAGS "" CACHE STRING "Specify ABI compiler flags (generic arm-linux-gnueabihf build only)")
+endif ()
+if (IOS OR (RPI AND "${RPI_ABI}" MATCHES NEON) OR (ARM AND (NATIVE_64BIT OR "${ARM_ABI_FLAGS}" MATCHES neon)))    # Stringify in case RPI_ABI/ARM_ABI_FLAGS is not set explicitly
     # The 'NEON' CMake variable is already set by android.toolchain.cmake when the chosen ANDROID_ABI uses NEON
     set (NEON TRUE)
 endif ()
@@ -580,31 +583,41 @@ if (MSVC)
 else ()
     # GCC/Clang-specific setup
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-invalid-offsetof")
-    if (NOT ANDROID)    # Most of the flags are already setup in android.toolchain.cmake module
-        if (RPI)
-            # The configuration is done here instead of in raspberrypi.toolchain.cmake file because we also support native build which does not use that file at all
-            add_definitions (-DRPI)
-            set (RPI_CFLAGS "-pipe -mfloat-abi=hard -Wno-psabi")    # We only support armhf distros, so turn on hard-float by default
-            if (RPI_ABI MATCHES ^armeabi-v7a)
-                set (RPI_CFLAGS "${RPI_CFLAGS} -mcpu=cortex-a7")
-                if (RPI_ABI MATCHES NEON)
-                    set (RPI_CFLAGS "${RPI_CFLAGS} -mfpu=neon-vfpv4")
-                elseif (RPI_ABI MATCHES VFPV4)
-                    set (RPI_CFLAGS "${RPI_CFLAGS} -mfpu=vfpv4")
+    if (NOT ANDROID AND NOT IOS AND NOT TVOS)    # Most of the flags are already setup in android.toolchain.cmake module or already has correct default setup for iOS
+        if (ARM)
+            # Common compiler flags for aarch64-linux-gnu and arm-linux-gnueabihf, we do not support Windows on arm for now
+            set (ARM_CFLAGS "${ARM_CFLAGS} -pipe")
+            if (NOT NATIVE_64BIT)
+                set (ARM_CFLAGS "${ARM_CFLAGS} -mfloat-abi=hard -Wno-psabi")    # We only support armhf distros, so turn on hard-float by default
+            endif ()
+            # The configuration is done here instead of in CMake toolchain file because we also support native build which does not use toolchain file at all
+            if (RPI)
+                # RPI-specific setup
+                add_definitions (-DRPI)
+                if (RPI_ABI MATCHES ^armeabi-v7a)
+                    set (ARM_CFLAGS "${ARM_CFLAGS} -mcpu=cortex-a7")
+                    if (RPI_ABI MATCHES NEON)
+                        set (ARM_CFLAGS "${ARM_CFLAGS} -mfpu=neon-vfpv4")
+                    elseif (RPI_ABI MATCHES VFPV4)
+                        set (ARM_CFLAGS "${ARM_CFLAGS} -mfpu=vfpv4")
+                    else ()
+                        set (ARM_CFLAGS "${ARM_CFLAGS} -mfpu=vfpv4-d16")
+                    endif ()
                 else ()
-                    set (RPI_CFLAGS "${RPI_CFLAGS} -mfpu=vfpv4-d16")
+                    set (ARM_CFLAGS "${ARM_CFLAGS} -mcpu=arm1176jzf-s -mfpu=vfp")
                 endif ()
             else ()
-                set (RPI_CFLAGS "${RPI_CFLAGS} -mcpu=arm1176jzf-s -mfpu=vfp")
-            endif ()
-            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${RPI_CFLAGS}")
-            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${RPI_CFLAGS}")
-        elseif (ARM)
-            set (ARM_CFLAGS "${ARM_CFLAGS} -pipe")
-            if (NOT ARM64)
-                set (ARM_CFLAGS "${ARM_CFLAGS} -mfloat-abi=hard -Wno-psabi")    # We only support armhf distros, so turn on hard-float by default
-                # todo: fix asm in as for arm
-                add_definitions (-DAS_MAX_PORTABILITY)
+                # Generic ARM-specific setup
+                add_definitions (-DGENERIC_ARM)
+                if (NATIVE_64BIT)
+                    # aarch64 has only one valid arch so far, so it does not need to use ARM_ABI_FLAGS build option
+                    set (ARM_CFLAGS "${ARM_CFLAGS} -march=armv8-a")
+                elseif (ARM_ABI_FLAGS)
+                    # Instead of guessing all the possible ABIs, user would have to specify the ABI compiler flags explicitly via ARM_ABI_FLAGS build option
+                    set (ARM_CFLAGS "${ARM_CFLAGS} ${ARM_ABI_FLAGS}")
+                else ()
+                    message (FATAL_ERROR "The ARM_ABI_FLAGS build option is mandatory for targeting 32-bit generic ARM")
+                endif ()
             endif ()
             set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${ARM_CFLAGS}")
             set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${ARM_CFLAGS}")
@@ -1568,14 +1581,15 @@ macro (define_dependency_libs TARGET)
 
         # Graphics
         if (URHO3D_OPENGL)
-            if(VIDEO_OPENGLES)
-                CheckOpenGLES()
-            endif()
-            if (WIN32)
+            if (APPLE)
+                # Do nothing
+            elseif (WIN32)
                 list (APPEND LIBS opengl32)
-            elseif (ANDROID OR HAVE_VIDEO_OPENGLES)
-                list (APPEND LIBS GLESv1_CM GLESv2)
-            elseif (NOT APPLE AND NOT RPI)
+            elseif (ANDROID OR ARM)
+                if (NOT RPI)
+                    list (APPEND LIBS GLESv1_CM GLESv2)
+                endif ()
+            else ()
                 list (APPEND LIBS GL)
             endif ()
         elseif (DIRECT3D_LIBRARIES)
